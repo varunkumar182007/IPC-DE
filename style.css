@@ -39,6 +39,9 @@ html, body {
   font-family: var(--mono);
 }
 
+
+<link rel="stylesheet" href="style.css">
+<script src="script.js"></script>
 /* ── HEADER ─────────────────────────────────────────────── */
 .header {
   display: flex; align-items: center; justify-content: space-between;
