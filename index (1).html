@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IPC Debugger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo-mark">
+      <span class="logo-glyph">⬡</span>
+    </div>
+    <div class="header-titles">
+      <h1 class="app-title">IPC DEBUGGER</h1>
+      <p class="app-sub">inter-process communication visualizer</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="conn-indicator" id="conn-indicator">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span id="conn-label">CONNECTING</span>
+    </div>
+    <div class="header-stat"><span class="hs-label">PID</span><span class="hs-val" id="sys-pid">—</span></div>
+    <div class="header-stat"><span class="hs-label">PROCS</span><span class="hs-val">3</span></div>
+    <div class="header-stat"><span class="hs-label">TIME</span><span class="hs-val" id="sys-clock">00:00:00</span></div>
+  </div>
+</header>
+
+<!-- NAV TABS -->
+<nav class="nav-tabs">
+  <button class="nav-tab active" data-tab="pipes">
+    <span class="tab-icon">⇒</span>
+    <span class="tab-name">PIPES</span>
+    <span class="tab-chip">Simplex</span>
+  </button>
+  <button class="nav-tab" data-tab="mq">
+    <span class="tab-icon">▣</span>
+    <span class="tab-name">MSG QUEUE</span>
+    <span class="tab-chip">FIFO</span>
+  </button>
+  <button class="nav-tab" data-tab="shm">
+    <span class="tab-icon">◫</span>
+    <span class="tab-name">SHARED MEM</span>
+    <span class="tab-chip">R/W</span>
+  </button>
+</nav>
+
+<!-- MAIN LAYOUT -->
+<div class="layout">
+  <div class="workspace">
+
+    <!-- ===== PIPES PANEL ===== -->
+    <section class="panel active" id="panel-pipes">
+
+      <div class="explain-card">
+        <div class="ex-icon">⌁</div>
+        <div>
+          <div class="ex-title">Pipes — Unidirectional byte stream</div>
+          <div class="ex-body">A pipe is a one-way kernel-managed channel. Data written to <code>fd[1]</code> is buffered and read from <code>fd[0]</code>. Blocks on write when full; blocks on read when empty. Chained pipes form pipelines.</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card"><div class="sc-label">SENT</div><div class="sc-val blue" id="p-stat-sent">0</div></div>
+        <div class="stat-card"><div class="sc-label">RECEIVED</div><div class="sc-val green" id="p-stat-recv">0</div></div>
+        <div class="stat-card"><div class="sc-label">BYTES</div><div class="sc-val cyan" id="p-stat-bytes">0</div></div>
+        <div class="stat-card"><div class="sc-label">STATUS</div><div class="sc-val amber" id="p-stat-status">IDLE</div></div>
+      </div>
+
+      <!-- Controls -->
+      <div class="ctrl-bar">
+        <button class="btn btn-blue" id="btn-pipe-start" onclick="API.pipes.start()">▶ Start Pipes</button>
+        <button class="btn btn-green" id="btn-pipe-send" disabled onclick="API.pipes.send()">⇒ Send Data</button>
+        <button class="btn btn-ghost" onclick="API.pipes.reset()">↺ Reset</button>
+        <div class="ctrl-spacer"></div>
+        <label class="ctrl-label">DATA</label>
+        <input class="txt-input" id="pipe-data" value="HELLO_WORLD" maxlength="14">
+        <label class="ctrl-label">SPEED</label>
+        <select class="sel-input" id="pipe-speed">
+          <option value="800">Fast</option>
+          <option value="1400" selected>Normal</option>
+          <option value="2600">Slow</option>
+        </select>
+      </div>
+
+      <!-- Arena A→B -->
+      <div class="arena" id="arena-ab">
+        <div class="arena-label">PIPE_1 · A → B</div>
+        <div class="proc-row">
+          <!-- PROC A -->
+          <div class="proc-node">
+            <div class="proc-box" id="pbox-a1">
+              <div class="proc-emoji">⚙</div>
+              <div class="proc-name">PROC-A</div>
+              <div class="proc-pid">PID:1001</div>
+            </div>
+            <div class="proc-badge idle" id="pbadge-a1">IDLE</div>
+          </div>
+          <!-- Pipe channel -->
+          <div class="pipe-channel">
+            <div class="pipe-tube" id="tube-ab">
+              <div class="pipe-pkt" id="pkt-ab"></div>
+              <div class="pipe-arrow">⟶</div>
+            </div>
+            <div class="pipe-info">fd[0] read · fd[1] write</div>
+            <div class="pipe-progress"><div class="pipe-fill" id="pfill-ab"></div></div>
+          </div>
+          <!-- PROC B -->
+          <div class="proc-node">
+            <div class="proc-box" id="pbox-b1">
+              <div class="proc-emoji">⚙</div>
+              <div class="proc-name">PROC-B</div>
+              <div class="proc-pid">PID:1002</div>
+            </div>
+            <div class="proc-badge idle" id="pbadge-b1">IDLE</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arena B→C -->
+      <div class="arena" id="arena-bc">
+        <div class="arena-label">PIPE_2 · B → C (chained)</div>
+        <div class="proc-row">
+          <div class="proc-node">
+            <div class="proc-box" id="pbox-b2">
+              <div class="proc-emoji">⚙</div>
+              <div class="proc-name">PROC-B</div>
+              <div class="proc-pid">PID:1002</div>
+            </div>
+            <div class="proc-badge idle" id="pbadge-b2">IDLE</div>
+          </div>
+          <div class="pipe-channel">
+            <div class="pipe-tube" id="tube-bc">
+              <div class="pipe-pkt" id="pkt-bc"></div>
+              <div class="pipe-arrow">⟶</div>
+            </div>
+            <div class="pipe-info">forwarded stream</div>
+            <div class="pipe-progress"><div class="pipe-fill" id="pfill-bc"></div></div>
+          </div>
+          <div class="proc-node">
+            <div class="proc-box" id="pbox-c1">
+              <div class="proc-emoji">⚙</div>
+              <div class="proc-name">PROC-C</div>
+              <div class="proc-pid">PID:1003</div>
+            </div>
+            <div class="proc-badge idle" id="pbadge-c1">IDLE</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===== MESSAGE QUEUE PANEL ===== -->
+    <section class="panel" id="panel-mq">
+
+      <div class="explain-card">
+        <div class="ex-icon">▤</div>
+        <div>
+          <div class="ex-title">Message Queue — POSIX SysV FIFO async messaging</div>
+          <div class="ex-body">Processes exchange typed messages via <code>msgsnd()</code> and <code>msgrcv()</code>. The kernel stores messages in a FIFO buffer — producers and consumers operate independently, enabling decoupled async communication.</div>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="sc-label">ENQUEUED</div><div class="sc-val blue" id="mq-stat-enq">0</div></div>
+        <div class="stat-card"><div class="sc-label">DEQUEUED</div><div class="sc-val green" id="mq-stat-deq">0</div></div>
+        <div class="stat-card"><div class="sc-label">DEPTH</div><div class="sc-val amber" id="mq-stat-depth">0</div></div>
+        <div class="stat-card"><div class="sc-label">DROPPED</div><div class="sc-val red" id="mq-stat-drop">0</div></div>
+      </div>
+
+      <div class="ctrl-bar">
+        <button class="btn btn-green"  onclick="API.mq.enqueue()">+ Enqueue</button>
+        <button class="btn btn-amber"  id="btn-mq-deq" disabled onclick="API.mq.dequeue()">− Dequeue</button>
+        <button class="btn btn-blue"   onclick="API.mq.auto()">▶ Auto Run</button>
+        <button class="btn btn-ghost"  onclick="API.mq.reset()">↺ Reset</button>
+        <div class="ctrl-spacer"></div>
+        <label class="ctrl-label">MSG</label>
+        <input class="txt-input" id="mq-msg" value="MSG_001" maxlength="12">
+        <label class="ctrl-label">FROM</label>
+        <select class="sel-input" id="mq-from">
+          <option>PROC-A</option><option>PROC-B</option><option>PROC-C</option>
+        </select>
+        <label class="ctrl-label">PRIO</label>
+        <select class="sel-input" id="mq-prio">
+          <option>HIGH</option><option selected>NORMAL</option><option>LOW</option>
+        </select>
+      </div>
+
+      <!-- QUEUE VISUALIZER -->
+      <div class="arena">
+        <div class="arena-label">KERNEL MESSAGE QUEUE · FIFO · max 8</div>
+        <div class="mq-layout">
+          <!-- Producer side -->
+          <div class="mq-side">
+            <div class="proc-box" id="mq-pbox-a"><div class="proc-emoji">⚙</div><div class="proc-name">PROC-A</div><div class="proc-pid">PID:1001</div></div>
+            <div class="proc-badge idle" id="mq-pbadge-a">IDLE</div>
+            <div class="proc-box" style="margin-top:12px" id="mq-pbox-b"><div class="proc-emoji">⚙</div><div class="proc-name">PROC-B</div><div class="proc-pid">PID:1002</div></div>
+            <div class="proc-badge idle" id="mq-pbadge-b">IDLE</div>
+            <div class="mq-side-label">PRODUCERS</div>
+          </div>
+          <!-- Arrow in -->
+          <div class="mq-arrow-in">msgsnd() →</div>
+          <!-- Queue slots -->
+          <div class="queue-wrap">
+            <div class="queue-track" id="mq-track"></div>
+            <div class="queue-meta">
+              <span class="q-dir in">← ENQUEUE (tail)</span>
+              <span class="q-dir out">DEQUEUE (head) →</span>
+            </div>
+          </div>
+          <!-- Arrow out -->
+          <div class="mq-arrow-out">→ msgrcv()</div>
+          <!-- Consumer -->
+          <div class="mq-side">
+            <div class="proc-box" id="mq-pbox-c"><div class="proc-emoji">⚙</div><div class="proc-name">PROC-C</div><div class="proc-pid">PID:1003</div></div>
+            <div class="proc-badge idle" id="mq-pbadge-c">IDLE</div>
+            <div class="mq-side-label">CONSUMER</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===== SHARED MEMORY PANEL ===== -->
+    <section class="panel" id="panel-shm">
+
+      <div class="explain-card">
+        <div class="ex-icon">◈</div>
+        <div>
+          <div class="ex-title">Shared Memory — Fastest IPC, needs synchronization</div>
+          <div class="ex-body">All processes access the same physical memory via <code>shmat()</code>. No kernel copy → maximum speed. Without a mutex, concurrent writes create <strong>race conditions</strong> — unsynchronized read-modify-write causes lost updates and data corruption.</div>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="sc-label">WRITES</div><div class="sc-val blue" id="shm-stat-w">0</div></div>
+        <div class="stat-card"><div class="sc-label">READS</div><div class="sc-val green" id="shm-stat-r">0</div></div>
+        <div class="stat-card"><div class="sc-label">CONFLICTS</div><div class="sc-val red" id="shm-stat-c">0</div></div>
+        <div class="stat-card"><div class="sc-label">MUTEX</div><div class="sc-val" id="shm-stat-m" style="color:var(--dim)">OFF</div></div>
+      </div>
+
+      <div class="ctrl-bar">
+        <button class="btn btn-blue"   onclick="API.shm.write('PROC-A')">PROC-A Write</button>
+        <button class="btn btn-green"  onclick="API.shm.write('PROC-B')">PROC-B Write</button>
+        <button class="btn btn-ghost"  onclick="API.shm.read()">◎ Read All</button>
+        <button class="btn btn-red"    onclick="API.shm.race()">⚡ Race Condition</button>
+        <button class="btn btn-ghost"  onclick="API.shm.reset()">↺ Reset</button>
+        <div class="ctrl-spacer"></div>
+        <label class="ctrl-label">MUTEX</label>
+        <div class="toggle-wrap" onclick="API.shm.toggleMutex()">
+          <div class="toggle-track" id="mutex-track"></div>
+          <div class="toggle-thumb" id="mutex-thumb"></div>
+        </div>
+        <span class="ctrl-label" id="mutex-label" style="color:var(--dim)">OFF</span>
+      </div>
+
+      <!-- Race banner -->
+      <div class="race-banner" id="race-banner">
+        <span class="rb-icon">⚠</span>
+        <span id="race-text">RACE CONDITION DETECTED</span>
+      </div>
+
+      <!-- Lock strip -->
+      <div class="lock-strip">
+        <div class="lock-icon" id="lock-icon">🔓</div>
+        <div>
+          <div class="lock-name">Mutex / Semaphore</div>
+          <div class="lock-owner" id="lock-owner">No owner</div>
+        </div>
+        <div class="lock-badge unlocked" id="lock-badge">UNLOCKED</div>
+      </div>
+
+      <!-- Memory grid -->
+      <div class="arena">
+        <div class="arena-label">SHARED SEGMENT · shmget() · 32 × 4 bytes</div>
+        <div class="mem-grid" id="mem-grid"></div>
+      </div>
+
+      <!-- Process row -->
+      <div class="arena" style="margin-top:14px">
+        <div class="arena-label">PROCESS ACCESS · shmat()</div>
+        <div class="proc-row" style="justify-content:space-around">
+          <div class="proc-node">
+            <div class="proc-box" id="shm-pbox-a"><div class="proc-emoji">⚙</div><div class="proc-name">PROC-A</div><div class="proc-pid">PID:1001</div></div>
+            <div class="proc-badge idle" id="shm-pbadge-a">IDLE</div>
+          </div>
+          <div class="shm-connector">⇄ shared segment ⇄</div>
+          <div class="proc-node">
+            <div class="proc-box" id="shm-pbox-b"><div class="proc-emoji">⚙</div><div class="proc-name">PROC-B</div><div class="proc-pid">PID:1002</div></div>
+            <div class="proc-badge idle" id="shm-pbadge-b">IDLE</div>
+          </div>
+          <div class="shm-connector">⇄ shared segment ⇄</div>
+          <div class="proc-node">
+            <div class="proc-box" id="shm-pbox-c"><div class="proc-emoji">⚙</div><div class="proc-name">PROC-C</div><div class="proc-pid">PID:1003</div></div>
+            <div class="proc-badge idle" id="shm-pbadge-c">IDLE</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </div><!-- /workspace -->
+
+  <!-- LOG SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-header">
+      <div class="sb-title">KERNEL LOG</div>
+      <div class="sb-actions">
+        <button class="btn-micro" id="btn-pause-log" onclick="toggleLogPause()">⏸</button>
+        <button class="btn-micro" onclick="clearLog()">CLR</button>
+      </div>
+    </div>
+    <div class="log-box" id="log-box"></div>
+    <div class="sb-footer">
+      <span id="log-count" style="color:var(--dim);font-size:11px">0 entries</span>
+      <span style="color:var(--dim);font-size:11px" id="ws-status">ws: —</span>
+    </div>
+  </aside>
+</div><!-- /layout -->
+
+<script src="script.js"></script>
+</body>
+</html>
